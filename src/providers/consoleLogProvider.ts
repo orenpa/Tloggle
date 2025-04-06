@@ -4,13 +4,14 @@ import { ConsoleLogManager } from '../utils/consoleLogManager';
 export class ConsoleLogItem extends vscode.TreeItem {
     constructor(
         public readonly label: string,
-        public readonly collapsibleState: vscode.TreeItemCollapsibleState,
+        public collapsibleState: vscode.TreeItemCollapsibleState,
         public readonly filePath?: string,
         public readonly lineNumber?: number,
         public readonly logContent?: string,
         public readonly isCommented?: boolean,
         public readonly isFile: boolean = false,
-        public readonly children?: ConsoleLogItem[]
+        public children?: ConsoleLogItem[],
+        public readonly parent?: ConsoleLogItem
     ) {
         super(label, collapsibleState);
 
@@ -39,16 +40,50 @@ export class ConsoleLogProvider implements vscode.TreeDataProvider<ConsoleLogIte
     private _onDidChangeTreeData: vscode.EventEmitter<ConsoleLogItem | undefined | null | void> = new vscode.EventEmitter<ConsoleLogItem | undefined | null | void>();
     readonly onDidChangeTreeData: vscode.Event<ConsoleLogItem | undefined | null | void> = this._onDidChangeTreeData.event;
     private fileNodes: Map<string, ConsoleLogItem> = new Map();
+    private defaultCollapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+    private itemsMap: Map<string, ConsoleLogItem> = new Map();
 
     constructor(private consoleLogManager: ConsoleLogManager) {}
 
-    refresh(): void {
-        this.fileNodes.clear();
-        this._onDidChangeTreeData.fire();
+    refresh(element?: ConsoleLogItem): void {
+        if (element) {
+            this._onDidChangeTreeData.fire(element);
+        } else {
+            this.fileNodes.clear();
+            this.itemsMap.clear();
+            this._onDidChangeTreeData.fire();
+        }
     }
 
     getTreeItem(element: ConsoleLogItem): ConsoleLogItem {
         return element;
+    }
+
+    getParent(element: ConsoleLogItem): vscode.ProviderResult<ConsoleLogItem> {
+        return element.parent;
+    }
+
+    collapseAll(): void {
+        // Update all file nodes to collapsed state
+        for (const [_, fileItem] of this.fileNodes) {
+            fileItem.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+            this.refresh(fileItem);
+        }
+    }
+
+    expandAll(): void {
+        // Update all file nodes to expanded state and trigger refresh
+        for (const [_, fileItem] of this.fileNodes) {
+            fileItem.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+        }
+        this._onDidChangeTreeData.fire();
+    }
+
+    private getItemId(item: ConsoleLogItem): string {
+        if (item.isFile) {
+            return item.filePath || item.label;
+        }
+        return `${item.filePath}:${item.lineNumber}`;
     }
 
     async getChildren(element?: ConsoleLogItem): Promise<ConsoleLogItem[]> {
@@ -81,30 +116,51 @@ export class ConsoleLogProvider implements vscode.TreeDataProvider<ConsoleLogIte
         // Create tree items
         for (const [filePath, fileLogs] of fileGroups) {
             const relativePath = vscode.workspace.asRelativePath(filePath);
-            const logItems = fileLogs.map(log => new ConsoleLogItem(
-                `Line ${log.lineNumber}: ${log.content}`,
-                vscode.TreeItemCollapsibleState.None,
-                filePath,
-                log.lineNumber,
-                log.content,
-                log.isCommented
-            ));
-
             const fileItem = new ConsoleLogItem(
                 relativePath,
-                vscode.TreeItemCollapsibleState.Expanded,
+                this.defaultCollapsibleState,
                 filePath,
                 undefined,
                 undefined,
                 undefined,
-                true,
-                logItems
+                true
             );
 
+            const logItems = fileLogs.map(log => {
+                const logItem = new ConsoleLogItem(
+                    `Line ${log.lineNumber}: ${log.content}`,
+                    vscode.TreeItemCollapsibleState.None,
+                    filePath,
+                    log.lineNumber,
+                    log.content,
+                    log.isCommented,
+                    false,
+                    undefined,
+                    fileItem
+                );
+                this.itemsMap.set(this.getItemId(logItem), logItem);
+                return logItem;
+            });
+
+            fileItem.children = logItems;
             this.fileNodes.set(filePath, fileItem);
+            this.itemsMap.set(this.getItemId(fileItem), fileItem);
             items.push(fileItem);
         }
 
         return items;
+    }
+
+    async toggleAllLogs(comment: boolean): Promise<void> {
+        const logs = await this.consoleLogManager.scanForConsoleLogs();
+        for (const log of logs) {
+            if (log.isCommented !== comment) {
+                await this.consoleLogManager.toggleLog({
+                    filePath: log.filePath,
+                    lineNumber: log.lineNumber
+                });
+            }
+        }
+        this.refresh();
     }
 } 

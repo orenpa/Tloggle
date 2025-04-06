@@ -9,7 +9,7 @@ const App: React.FC<Props> = ({ title }) => {
 
     useEffect(() => {
         console.log('App component mounted');
-        // console.log('This log is commented out');
+        console.log('This log is commented out');
         console.error('Found an error in initialization');
         return () => {
             console.log('App component will unmount');

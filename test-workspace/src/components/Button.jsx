@@ -3,7 +3,7 @@ import React from 'react';
 function Button({ onClick, children }) {
     const handleClick = (e) => {
         console.log('Button clicked', e.target);
-        // console.log('Event details:', e);
+        console.log('Event details:', e);
         onClick(e);
     };
 

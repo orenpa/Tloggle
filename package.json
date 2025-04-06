@@ -30,22 +30,67 @@
         "command": "console-log-manager.toggleLog",
         "title": "Toggle Console Log",
         "category": "Console Log Manager"
+      },
+      {
+        "command": "console-log-manager.collapseAll",
+        "title": "Collapse All",
+        "category": "Console Log Manager",
+        "icon": "$(collapse-all)"
+      },
+      {
+        "command": "console-log-manager.expandAll",
+        "title": "Expand All",
+        "category": "Console Log Manager",
+        "icon": "$(expand-all)"
+      },
+      {
+        "command": "console-log-manager.showAll",
+        "title": "Enable All Console Logs",
+        "category": "Console Log Manager",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "console-log-manager.hideAll",
+        "title": "Disable All Console Logs",
+        "category": "Console Log Manager",
+        "icon": "$(eye-closed)"
       }
     ],
     "views": {
       "explorer": [
         {
           "id": "consoleLogs",
-          "name": "Console Logs"
+          "name": "Console Logs",
+          "type": "tree"
         }
       ]
     },
     "menus": {
       "view/title": [
         {
+          "command": "console-log-manager.collapseAll",
+          "when": "view == consoleLogs",
+          "group": "navigation@1"
+        },
+        {
+          "command": "console-log-manager.expandAll",
+          "when": "view == consoleLogs",
+          "group": "navigation@2"
+        },
+        {
+          "command": "console-log-manager.showAll",
+          "when": "view == consoleLogs",
+          "group": "navigation@3"
+        },
+        {
+          "command": "console-log-manager.hideAll",
+          "when": "view == consoleLogs",
+          "group": "navigation@4"
+        },
+        {
           "command": "console-log-manager.refresh",
           "when": "view == consoleLogs",
-          "group": "navigation"
+          "group": "navigation@5"
         }
       ]
     }
