@@ -8,27 +8,28 @@ export class ConsoleLogItem extends vscode.TreeItem {
         public readonly filePath?: string,
         public readonly lineNumber?: number,
         public readonly logContent?: string,
-        public readonly isCommented?: boolean
+        public readonly isCommented?: boolean,
+        public readonly isFile: boolean = false,
+        public readonly children?: ConsoleLogItem[]
     ) {
         super(label, collapsibleState);
 
-        if (filePath && lineNumber) {
+        if (isFile) {
+            // This is a file node
+            this.contextValue = 'file';
+            this.iconPath = new vscode.ThemeIcon('file');
+        } else if (filePath && lineNumber) {
+            // This is a log entry node
             this.tooltip = `Click to toggle console.log`;
             this.description = logContent;
-            
-            // Set icon to match VSCode's breakpoint style
             this.iconPath = new vscode.ThemeIcon(
                 isCommented ? 'circle-outline' : 'circle-filled'
             );
-
-            // Make the item clickable for toggling
             this.command = {
                 command: 'console-log-manager.toggleLog',
                 title: 'Toggle Console Log',
                 arguments: [this]
             };
-
-            // Set context value for when-clause in package.json
             this.contextValue = 'consoleLog';
         }
     }
@@ -37,10 +38,12 @@ export class ConsoleLogItem extends vscode.TreeItem {
 export class ConsoleLogProvider implements vscode.TreeDataProvider<ConsoleLogItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<ConsoleLogItem | undefined | null | void> = new vscode.EventEmitter<ConsoleLogItem | undefined | null | void>();
     readonly onDidChangeTreeData: vscode.Event<ConsoleLogItem | undefined | null | void> = this._onDidChangeTreeData.event;
+    private fileNodes: Map<string, ConsoleLogItem> = new Map();
 
     constructor(private consoleLogManager: ConsoleLogManager) {}
 
     refresh(): void {
+        this.fileNodes.clear();
         this._onDidChangeTreeData.fire();
     }
 
@@ -50,9 +53,14 @@ export class ConsoleLogProvider implements vscode.TreeDataProvider<ConsoleLogIte
 
     async getChildren(element?: ConsoleLogItem): Promise<ConsoleLogItem[]> {
         if (element) {
-            return []; // No nested items for now
+            // If it's a file node, return its log entries
+            if (element.contextValue === 'file') {
+                return element.children || [];
+            }
+            return [];
         }
 
+        // Root level - show files
         const logs = await this.consoleLogManager.scanForConsoleLogs();
         const fileGroups = new Map<string, Array<{ lineNumber: number; content: string; isCommented: boolean }>>();
 
@@ -72,26 +80,29 @@ export class ConsoleLogProvider implements vscode.TreeDataProvider<ConsoleLogIte
 
         // Create tree items
         for (const [filePath, fileLogs] of fileGroups) {
-            // Add file as parent
-            const fileItem = new ConsoleLogItem(
-                vscode.workspace.asRelativePath(filePath),
-                vscode.TreeItemCollapsibleState.Expanded,
-                filePath
-            );
-            items.push(fileItem);
+            const relativePath = vscode.workspace.asRelativePath(filePath);
+            const logItems = fileLogs.map(log => new ConsoleLogItem(
+                `Line ${log.lineNumber}: ${log.content}`,
+                vscode.TreeItemCollapsibleState.None,
+                filePath,
+                log.lineNumber,
+                log.content,
+                log.isCommented
+            ));
 
-            // Add logs as children
-            for (const log of fileLogs) {
-                const logItem = new ConsoleLogItem(
-                    `Line ${log.lineNumber}: ${log.content}`,
-                    vscode.TreeItemCollapsibleState.None,
-                    filePath,
-                    log.lineNumber,
-                    log.content,
-                    log.isCommented
-                );
-                items.push(logItem);
-            }
+            const fileItem = new ConsoleLogItem(
+                relativePath,
+                vscode.TreeItemCollapsibleState.Expanded,
+                filePath,
+                undefined,
+                undefined,
+                undefined,
+                true,
+                logItems
+            );
+
+            this.fileNodes.set(filePath, fileItem);
+            items.push(fileItem);
         }
 
         return items;
